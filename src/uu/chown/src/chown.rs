@@ -46,11 +46,25 @@ fn parse_gid_uid_and_filter(matches: &ArgMatches) -> UResult<GidUidOwnerFilter> 
             entries::gid2grp(gid).unwrap_or_else(|_| gid.to_string())
         );
     } else {
-        raw_owner = matches
-            .get_one::<String>(options::ARG_OWNER)
-            .unwrap()
-            .into();
-        let (u, g) = parse_spec(&raw_owner, ':')?;
+        let owner = matches.get_one::<String>(options::ARG_OWNER).unwrap();
+        let (u, g) = parse_spec(owner, ':')?;
+        raw_owner = if owner.contains('+') {
+            owner
+                .split(':')
+                .enumerate()
+                .map(|(index, part)| {
+                    let id = if index == 0 { u } else { g };
+                    if part.starts_with('+') && part.parse::<u32>().is_ok() {
+                        id.map_or_else(|| part.to_owned(), |id| id.to_string())
+                    } else {
+                        part.to_owned()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(":")
+        } else {
+            owner.to_owned()
+        };
         dest_uid = u;
         dest_gid = g;
     }

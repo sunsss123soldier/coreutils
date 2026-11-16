@@ -188,7 +188,7 @@ pub enum TraverseSymlinks {
 pub struct ChownExecutor {
     pub dest_uid: Option<u32>,
     pub dest_gid: Option<u32>,
-    pub raw_owner: String, // The owner of the file as input by the user in the command line.
+    pub raw_owner: String, // The requested owner for verbose diagnostics.
     pub traverse_symlinks: TraverseSymlinks,
     pub verbosity: Verbosity,
     pub filter: IfFrom,
@@ -281,10 +281,23 @@ impl ChownExecutor {
         let path = root.as_ref();
         let Some(meta) = self.obtain_meta(path, self.dereference) else {
             if self.verbosity.level == VerbosityLevel::Verbose {
+                let group = if !self.verbosity.groups_only
+                    && self.dest_uid.is_none()
+                    && self.dest_gid.is_some()
+                {
+                    self.raw_owner.strip_prefix(':')
+                } else {
+                    None
+                };
+                let target = group.unwrap_or(&self.raw_owner);
                 self.write_verbose_line(&format!(
-                    "failed to change ownership of {} to {}",
-                    path.quote(),
-                    self.raw_owner
+                    "failed to change {} of {} to {target}",
+                    if group.is_some() {
+                        "group"
+                    } else {
+                        "ownership"
+                    },
+                    path.quote()
                 ));
             }
             return 1;
